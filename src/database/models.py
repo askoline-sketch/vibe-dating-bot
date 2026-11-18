@@ -108,3 +108,17 @@ class DailyUsage(Base):
     likes: Mapped[int] = mapped_column(Integer, default=0)
     superlikes: Mapped[int] = mapped_column(Integer, default=0)
     messages: Mapped[int] = mapped_column(Integer, default=0)
+
+class View(Base):
+    __tablename__ = 'views'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    from_user_id: Mapped[int] = mapped_column(
+        ForeignKey('users.id', ondelete='CASCADE')
+    )
+    to_user_id: Mapped[int] = mapped_column(
+        ForeignKey('users.id', ondelete='CASCADE')
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow
+    )

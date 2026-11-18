@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from src.database.db import async_session
 from src.database.models import User, Photo
-from src.services.matcher import find_next_candidate, create_like, get_user_matches
+from src.services.matcher import find_next_candidate, create_like, get_user_matches, save_view
 from src.services.limits import check_and_increment
 from src.keyboards.search import (
     search_actions_keyboard,
@@ -100,6 +100,10 @@ async def handle_action(callback: CallbackQuery, is_premium: bool = False):
         return
 
     action = callback.data
+
+    # === СОХРАНЯЕМ ПРОСМОТР В БД ===
+    async with async_session() as session:
+        await save_view(session, user.id, candidate_id)
 
     # ========== SKIP ==========
     if action == "skip":
