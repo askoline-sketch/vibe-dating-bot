@@ -5,7 +5,7 @@ import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram_fsm_storage import SQLiteStorage
+from aiogram_sqlite_storage.sqlitestore import SQLStorage
 
 from src.config import config
 from src.handlers import start, profile, search, chat, subscription
@@ -28,7 +28,7 @@ async def main():
     # Папка /app/data на BotHost сохраняется при перезапусках
     data_dir = os.getenv('DATA_DIR', '/app/data')
     os.makedirs(data_dir, exist_ok=True)
-    storage = SQLiteStorage('/app/data/fsm.db')
+    storage = SQLStorage('/app/data/fsm.db')
     dp = Dispatcher(storage=storage)
 
     # ========== MIDDLEWARES ==========
