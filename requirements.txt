@@ -24,3 +24,4 @@ typing_extensions==4.16.0
 yarl==1.25.1
 aiosqlite>=0.20.0
 sqlite-storage
+aiogram-sqlite-storage==0.1.1
