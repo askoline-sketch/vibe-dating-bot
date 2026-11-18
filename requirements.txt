@@ -1,6 +1,6 @@
 aiogram
 aiogram-sqlite-storage
 python-dotenv
-SQLAlchemy
+SQLAlchemy[asyncio]
 alembic
 asyncpg
