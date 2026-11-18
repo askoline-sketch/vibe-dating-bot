@@ -5,7 +5,7 @@ import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.fsm.storage.sqlite import SQLiteStorage  # <-- НОВЫЙ ИМПОРТ
+from aiogram_sqlite_storage.sqlitestore import SQLiteStorage  # <-- НОВЫЙ ИМПОРТ
 
 from src.config import config
 from src.handlers import start, profile, search, chat, subscription
