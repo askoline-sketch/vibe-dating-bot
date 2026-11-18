@@ -8,4 +8,5 @@ RUN pip install --no-cache-dir --default-timeout=100 -r requirements.txt
 
 COPY . .
 
-CMD ["python", "src/bot.py"]
+ENV PYTHONPATH=/app
+CMD ["python", "-m", "src.bot"]
