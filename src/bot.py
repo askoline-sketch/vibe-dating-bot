@@ -28,7 +28,7 @@ async def main():
     # Папка /app/data на BotHost сохраняется при перезапусках контейнера
     data_dir = os.getenv('DATA_DIR', '/app/data')
     os.makedirs(data_dir, exist_ok=True)
-    storage = SQLStorage(path=os.path.join(data_dir, 'fsm.db'))
+    storage = SQLStorage(os.path.join(data_dir, 'fsm.db'))
 
     dp = Dispatcher(storage=storage)
 
