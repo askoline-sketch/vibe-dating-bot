@@ -4,13 +4,12 @@ from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, desc
 
 from src.database.db import async_session
 from src.database.models import User, Match, Message as Msg
 from src.keyboards.chat import in_chat_keyboard
 from src.keyboards.registration import main_menu_keyboard
-from src.services.limits import check_and_increment
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +18,13 @@ router = Router()
 
 class ChatState(StatesGroup):
     in_chat = State()
+
+
+# Кнопки главного меню, которые НЕ должны пересылаться в чат
+MENU_BUTTONS = {
+    "🔍 Искать", "👤 Моя анкета", "❤️ Мои матчи",
+    "💜 Мои лайки", "💎 Подписка", "🆘 Техподдержка",
+}
 
 
 # ========== ВСПОМОГАТЕЛЬНЫЕ ==========
@@ -42,7 +48,20 @@ async def get_partner(match: Match, my_user_id: int) -> User | None:
         return result.scalar_one_or_none()
 
 
-# ========== ОТКРЫТИЕ И ВЫХОД ==========
+async def get_last_message_from_partner(match_id: int, partner_id: int) -> str | None:
+    """Получить последнее сообщение от собеседника."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Msg)
+            .where(and_(Msg.match_id == match_id, Msg.from_user_id == partner_id))
+            .order_by(desc(Msg.created_at))
+            .limit(1)
+        )
+        msg = result.scalar_one_or_none()
+        return msg.text if msg else None
+
+
+# ========== ОТКРЫТИЕ И ВЫХОД ИЗ ЧАТА ==========
 
 @router.callback_query(F.data.startswith("open_match_"))
 async def open_match(callback: CallbackQuery, state: FSMContext):
@@ -95,7 +114,7 @@ async def leave_chat(callback: CallbackQuery, state: FSMContext):
 
 # ========== ПЕРЕСЫЛКА СООБЩЕНИЙ ==========
 
-@router.message(ChatState.in_chat, F.text)
+@router.message(ChatState.in_chat, F.text, ~F.text.in_(MENU_BUTTONS))
 async def relay_message(message: Message, state: FSMContext, is_premium: bool = False):
     """Переслать сообщение собеседнику с проверкой лимита."""
     data = await state.get_data()
@@ -115,6 +134,7 @@ async def relay_message(message: Message, state: FSMContext, is_premium: bool = 
 
     # Проверка лимита сообщений
     if not is_premium:
+        from src.services.limits import check_and_increment
         allowed, remaining = await check_and_increment(user.id, "messages", 50)
         if not allowed:
             from src.keyboards.subscription import premium_locked_keyboard
@@ -144,7 +164,7 @@ async def relay_message(message: Message, state: FSMContext, is_premium: bool = 
         )
     except Exception as e:
         logger.error(f"Не удалось отправить сообщение партнёру {partner_tg_id}: {e}")
-        await message.answer("⚠️ Не удалось доставить сообщение.")
+        await message.answer("⚠️ Не удалось доставить сообщение (собеседник заблокировал бота?).")
         return
 
     if not is_premium:

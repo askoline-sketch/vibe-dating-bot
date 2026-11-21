@@ -24,7 +24,7 @@ class Config:
     SUBSCRIPTION_PRICE_STARS = 500
 
     # Админы
-    ADMIN_IDS = [int(x) for x in os.getenv('ADMIN_IDS', '').split(',') if x]
+    ADMIN_IDS = [int(x) for x in os.getenv('ADMIN_IDS', '').split(',') if x.strip().isdigit()]
 
     @property
     def database_url(self):

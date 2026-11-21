@@ -53,7 +53,8 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🔍 Искать"), KeyboardButton(text="👤 Моя анкета")],
-            [KeyboardButton(text="❤️ Мои матчи"), KeyboardButton(text="💎 Подписка")],
+            [KeyboardButton(text="❤️ Мои матчи"), KeyboardButton(text="💜 Мои лайки")],
+            [KeyboardButton(text="💎 Подписка"), KeyboardButton(text="🆘 Техподдержка")],
         ],
         resize_keyboard=True,
     )

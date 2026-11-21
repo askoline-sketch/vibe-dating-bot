@@ -5,10 +5,10 @@ import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram_sqlite_storage.sqlitestore import SQLStorage
+from aiogram.fsm.storage.sqlite import SQLiteStorage
 
 from src.config import config
-from src.handlers import start, profile, search, chat, subscription
+from src.handlers import start, profile, search, chat, subscription, support
 from src.middlewares.subscription import SubscriptionMiddleware
 
 logging.basicConfig(
@@ -24,11 +24,12 @@ async def main():
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
 
-    # Настройка хранилища состояний (SQLite)
-    # Папка /app/data на BotHost сохраняется при перезапусках
+    # ========== ХРАНИЛИЩЕ СОСТОЯНИЙ (SQLite) ==========
+    # Папка /app/data на BotHost сохраняется при перезапусках контейнера
     data_dir = os.getenv('DATA_DIR', '/app/data')
     os.makedirs(data_dir, exist_ok=True)
-    storage = SQLStorage('/app/data/fsm.db')
+    storage = SQLiteStorage(path=os.path.join(data_dir, 'fsm.db'))
+
     dp = Dispatcher(storage=storage)
 
     # ========== MIDDLEWARES ==========
@@ -41,8 +42,9 @@ async def main():
     dp.include_router(search.router)
     dp.include_router(chat.router)
     dp.include_router(subscription.router)
+    dp.include_router(support.router)  # ВАЖНО: подключаем поддержку
 
-    logger.info("🚀 Бот запущен (состояния сохраняются в SQLite)!")
+    logger.info("🚀 Бот запущен (FSM хранится в SQLite)!")
     await dp.start_polling(bot)
 
 

@@ -37,3 +37,16 @@ def back_to_menu_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🔙 В меню", callback_data="back_to_menu")],
         ]
     )
+
+def who_liked_keyboard(candidate_id: int) -> InlineKeyboardMarkup:
+    """Кнопки для анкеты, которая лайкнула тебя."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(
+                text="❤️ Лайкнуть в ответ",
+                callback_data=f"like_back_{candidate_id}",
+            )],
+            [InlineKeyboardButton(text="⏭ Следующий", callback_data="next_liked_me")],
+            [InlineKeyboardButton(text="🔙 В меню", callback_data="back_to_menu")],
+        ]
+    )
