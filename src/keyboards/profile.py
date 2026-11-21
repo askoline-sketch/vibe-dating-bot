@@ -4,7 +4,10 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 def profile_actions_keyboard(has_photos: bool = False) -> InlineKeyboardMarkup:
     """Кнопки под анкетой."""
     buttons = [
-        [InlineKeyboardButton(text="📸 Загрузить фото", callback_data="upload_photo")],
+        [
+            InlineKeyboardButton(text="📸 Загрузить фото", callback_data="upload_photo"),
+            InlineKeyboardButton(text="🗑 Удалить фото", callback_data="delete_photo_menu"),
+        ],
         [InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_profile")],
         [InlineKeyboardButton(text="🗑 Удалить анкету", callback_data="delete_profile")],
     ]

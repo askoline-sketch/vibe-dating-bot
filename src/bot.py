@@ -38,11 +38,11 @@ async def main():
 
     # ========== РОУТЕРЫ ==========
     dp.include_router(start.router)
+    dp.include_router(support.router)
     dp.include_router(profile.router)
     dp.include_router(search.router)
     dp.include_router(chat.router)
     dp.include_router(subscription.router)
-    dp.include_router(support.router)  # ВАЖНО: подключаем поддержку
 
     logger.info("🚀 Бот запущен (FSM хранится в SQLite)!")
     await dp.start_polling(bot)

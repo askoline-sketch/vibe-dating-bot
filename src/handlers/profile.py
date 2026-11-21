@@ -14,6 +14,7 @@ from src.keyboards.profile import (
     cancel_keyboard,
     delete_confirm_keyboard,
 )
+from src.keyboards.registration import main_menu_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +31,12 @@ class EditProfile(StatesGroup):
 
 
 async def get_user_by_tg(tg_id: int) -> User | None:
-    """Получить пользователя по Telegram ID."""
     async with async_session() as session:
-        result = await session.execute(
-            select(User).where(User.tg_id == tg_id)
-        )
+        result = await session.execute(select(User).where(User.tg_id == tg_id))
         return result.scalar_one_or_none()
 
 
 async def get_user_photos(user_id: int) -> list[Photo]:
-    """Получить фото пользователя."""
     async with async_session() as session:
         result = await session.execute(
             select(Photo).where(Photo.user_id == user_id).order_by(Photo.position)
@@ -48,7 +45,6 @@ async def get_user_photos(user_id: int) -> list[Photo]:
 
 
 async def show_profile(message: Message, user: User, photos: list[Photo]):
-    """Отображает анкету пользователя."""
     text = (
         f"👤 <b>Твоя анкета</b>\n\n"
         f"<b>Имя:</b> {user.name}\n"
@@ -68,8 +64,8 @@ async def show_profile(message: Message, user: User, photos: list[Photo]):
 # ========== ПРОСМОТР АНКЕТЫ ==========
 
 @router.message(F.text == "👤 Моя анкета")
-async def my_profile(message: Message):
-    """Показать анкету."""
+async def my_profile(message: Message, state: FSMContext):
+    await state.clear()  # Сбрасываем возможные состояния
     user = await get_user_by_tg(message.from_user.id)
     if not user:
         await message.answer("❌ Ты ещё не зарегистрирован. Напиши /start.")
@@ -81,7 +77,6 @@ async def my_profile(message: Message):
 
 @router.callback_query(F.data == "back_to_profile")
 async def back_to_profile(callback: CallbackQuery, state: FSMContext):
-    """Вернуться к анкете."""
     await state.clear()
     user = await get_user_by_tg(callback.from_user.id)
     if not user:
@@ -97,8 +92,8 @@ async def back_to_profile(callback: CallbackQuery, state: FSMContext):
 # ========== ЗАГРУЗКА ФОТО ==========
 
 @router.callback_query(F.data == "upload_photo")
-async def start_upload_photo(callback: CallbackQuery):
-    """Начало загрузки фото."""
+async def start_upload_photo(callback: CallbackQuery, state: FSMContext):
+    await state.clear()  # Важно очистить состояние, чтобы фото не улетело в поддержку
     user = await get_user_by_tg(callback.from_user.id)
     if not user:
         await callback.answer("Анкета не найдена", show_alert=True)
@@ -118,8 +113,12 @@ async def start_upload_photo(callback: CallbackQuery):
 
 
 @router.message(F.photo)
-async def handle_photo(message: Message):
-    """Сохранить присланное фото в анкету."""
+async def handle_photo(message: Message, state: FSMContext):
+    # Защита: если пользователь в состоянии поддержки, игнорируем
+    current_state = await state.get_state()
+    if current_state == 'SupportState:waiting':
+        return
+
     user = await get_user_by_tg(message.from_user.id)
     if not user:
         await message.answer("❌ Сначала зарегистрируйся через /start.")
@@ -127,10 +126,10 @@ async def handle_photo(message: Message):
 
     photos = await get_user_photos(user.id)
     if len(photos) >= MAX_PHOTOS:
-        await message.answer(f"❌ У тебя уже {MAX_PHOTOS} фото. Удалять старые — через /start.")
+        await message.answer(f"❌ У тебя уже {MAX_PHOTOS} фото.")
         return
 
-    file_id = message.photo[-1].file_id  # берём максимальное разрешение
+    file_id = message.photo[-1].file_id
 
     async with async_session() as session:
         photo = Photo(
@@ -147,18 +146,57 @@ async def handle_photo(message: Message):
     )
 
 
-# ========== РЕДАКТИРОВАНИЕ ==========
+# ========== УДАЛЕНИЕ ФОТО ==========
+
+@router.callback_query(F.data == "delete_photo_menu")
+async def delete_photo_menu(callback: CallbackQuery):
+    user = await get_user_by_tg(callback.from_user.id)
+    if not user:
+        return
+
+    photos = await get_user_photos(user.id)
+    if not photos:
+        await callback.answer("У тебя нет фото для удаления.", show_alert=True)
+        return
+
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    buttons = []
+    for p in photos:
+        buttons.append(
+            [InlineKeyboardButton(text=f"Удалить Фото #{p.position + 1}", callback_data=f"del_photo_{p.id}")])
+    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_profile")])
+
+    await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("del_photo_"))
+async def delete_photo(callback: CallbackQuery):
+    photo_id = int(callback.data.split("_")[-1])
+
+    async with async_session() as session:
+        await session.execute(sql_delete(Photo).where(Photo.id == photo_id))
+        await session.commit()
+
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer("🗑 Фото удалено.")
+
+    user = await get_user_by_tg(callback.from_user.id)
+    photos = await get_user_photos(user.id)
+    await show_profile(callback.message, user, photos)
+    await callback.answer()
+
+
+# ========== РЕДАКТИРОВАНИЕ ТЕКСТА ==========
 
 @router.callback_query(F.data == "edit_profile")
 async def start_edit(callback: CallbackQuery):
-    """Показать меню редактирования."""
     await callback.message.edit_reply_markup(reply_markup=edit_profile_keyboard())
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("edit_"))
 async def edit_field(callback: CallbackQuery, state: FSMContext):
-    """Запрос нового значения поля."""
     field = callback.data.split("_")[1]
 
     prompts = {
@@ -215,7 +253,6 @@ async def save_bio(message: Message, state: FSMContext):
 
 
 async def update_field(message: Message, state: FSMContext, field: str, value):
-    """Обновить поле в БД и вернуть к анкете."""
     user = await get_user_by_tg(message.from_user.id)
     if not user:
         await message.answer("❌ Анкета не найдена.")
@@ -240,14 +277,12 @@ async def update_field(message: Message, state: FSMContext, field: str, value):
 
 @router.callback_query(F.data == "delete_profile")
 async def ask_delete(callback: CallbackQuery):
-    """Подтверждение удаления."""
     await callback.message.edit_reply_markup(reply_markup=delete_confirm_keyboard())
     await callback.answer()
 
 
 @router.callback_query(F.data == "confirm_delete_profile")
 async def confirm_delete(callback: CallbackQuery):
-    """Удалить анкету и фото."""
     user = await get_user_by_tg(callback.from_user.id)
     if not user:
         await callback.answer("Анкета не найдена", show_alert=True)
@@ -260,7 +295,6 @@ async def confirm_delete(callback: CallbackQuery):
 
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
-        "🗑 Анкета удалена.\n\n"
-        "Чтобы создать заново, напиши /start.",
+        "🗑 Анкета удалена.\n\nЧтобы создать заново, напиши /start.",
     )
     await callback.answer("Удалено")
