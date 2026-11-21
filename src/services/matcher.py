@@ -1,47 +1,38 @@
+from datetime import datetime
 from sqlalchemy import select, and_, or_, not_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import User, Like, Match, View
 
 
-async def save_view(session: AsyncSession, from_user_id: int, to_user_id: int):
-    """Запоминаем, что пользователь просмотрел анкету (скип или лайк)."""
+async def save_or_touch_view(session: AsyncSession, from_user_id: int, to_user_id: int):
+    """
+    Сохранить просмотр. Если уже есть — обновить время (для цикличного показа).
+    """
     existing = await session.execute(
         select(View).where(
             and_(View.from_user_id == from_user_id, View.to_user_id == to_user_id)
         )
     )
-    if not existing.scalar_one_or_none():
+    view = existing.scalar_one_or_none()
+    if view:
+        view.created_at = datetime.utcnow()
+    else:
         session.add(View(from_user_id=from_user_id, to_user_id=to_user_id))
-        await session.commit()
+    await session.commit()
 
 
-async def find_next_candidate(
-    session: AsyncSession,
-    user: User,
-) -> User | None:
-    """
-    Найти следующую анкету для пользователя:
-    - подходящий пол
-    - подходящий возраст (±5 лет)
-    - не он сам
-    - не лайкнут ранее
-    - не просмотрен ранее (View)
-    """
-    # Пол, который ищем
+async def _find_unseen_candidate(session: AsyncSession, user: User) -> User | None:
+    """Найти анкету, которую пользователь ещё НЕ видел."""
     if user.looking_for == "any":
         gender_filter = User.gender.in_(["male", "female"])
     else:
         gender_filter = User.gender == user.looking_for
 
-    # Возраст ±5 лет
     age_min = max(18, user.age - 5)
     age_max = user.age + 5
 
-    # Пользователи, которых уже лайкнул
     liked_subq = select(Like.to_user_id).where(Like.from_user_id == user.id)
-
-    # Пользователи, которых уже просмотрел (исключаем их)
     viewed_subq = select(View.to_user_id).where(View.from_user_id == user.id)
 
     stmt = (
@@ -57,37 +48,87 @@ async def find_next_candidate(
                 not_(User.id.in_(viewed_subq)),
             )
         )
-        .order_by(func.random())  # Случайный порядок, чтобы не показывать одних и тех же
+        .order_by(func.random())
         .limit(1)
     )
-
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
 
+async def _find_longest_unviewed(session: AsyncSession, user: User) -> User | None:
+    """
+    Найти анкету, которую видели давно (цикличный показ).
+    Сортировка по времени просмотра (ASC) — кто был просмотрен раньше, тот и следующий.
+    """
+    if user.looking_for == "any":
+        gender_filter = User.gender.in_(["male", "female"])
+    else:
+        gender_filter = User.gender == user.looking_for
+
+    age_min = max(18, user.age - 5)
+    age_max = user.age + 5
+
+    liked_subq = select(Like.to_user_id).where(Like.from_user_id == user.id)
+
+    stmt = (
+        select(User)
+        .join(View, View.to_user_id == User.id)
+        .where(
+            View.from_user_id == user.id,
+            User.id != user.id,
+            User.is_active == True,
+            gender_filter,
+            User.age >= age_min,
+            User.age <= age_max,
+            not_(User.id.in_(liked_subq)),
+        )
+        .order_by(View.created_at.asc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def find_next_candidate(session: AsyncSession, user: User) -> User | None:
+    """
+    Найти следующего кандидата:
+    1. Сначала — тех, кого ещё не видел.
+    2. Если таких нет — тех, кого видел давно (цикличный режим).
+    При показе сразу сохраняем просмотр (защита от повторов).
+    """
+    candidate = await _find_unseen_candidate(session, user)
+
+    if candidate is None:
+        candidate = await _find_longest_unviewed(session, user)
+
+    if candidate:
+        await save_or_touch_view(session, user.id, candidate.id)
+
+    return candidate
+
+
 async def create_like(
-    session: AsyncSession,
-    from_user_id: int,
-    to_user_id: int,
-    is_super: bool = False,
-) -> Match | None:
+        session: AsyncSession,
+        from_user_id: int,
+        to_user_id: int,
+        is_super: bool = False,
+) -> tuple[Match | None, Like | None]:
     """
-    Создать лайк. Если это взаимно — создать Match.
-    Возвращает Match, если совпадение, иначе None.
+    Создать лайк.
+    Возвращает (match, like_created):
+      - match — объект Match, если взаимно (иначе None)
+      - like_created — созданный Like, если это новый лайк (иначе None)
     """
-    # Проверяем, есть ли уже лайк от нас
     stmt = select(Like).where(
         and_(Like.from_user_id == from_user_id, Like.to_user_id == to_user_id)
     )
     existing = (await session.execute(stmt)).scalar_one_or_none()
     if existing:
-        return None
+        return None, None  # Уже лайкали — ничего нового
 
-    # Создаём лайк
     like = Like(from_user_id=from_user_id, to_user_id=to_user_id, is_super=is_super)
     session.add(like)
 
-    # Проверяем, лайкнул ли он нас
     reverse_stmt = select(Like).where(
         and_(Like.from_user_id == to_user_id, Like.to_user_id == from_user_id)
     )
@@ -95,12 +136,11 @@ async def create_like(
 
     match = None
     if reverse_like:
-        # Взаимно — создаём матч
         match = Match(user1_id=from_user_id, user2_id=to_user_id)
         session.add(match)
 
     await session.commit()
-    return match
+    return match, like
 
 
 async def get_user_matches(session: AsyncSession, user_id: int) -> list[dict]:
