@@ -1,5 +1,5 @@
 aiogram
-aiogram-sqlite-storage
+aiogram-fsm-sqlitestorage>=1.0.0
 python-dotenv
 SQLAlchemy[asyncio]
 alembic
