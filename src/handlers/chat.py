@@ -129,3 +129,19 @@ async def relay_message(message: Message, state: FSMContext, is_premium: bool = 
         await message.answer(f"✅ Отправлено (осталось: {remaining})")
     else:
         await message.answer("✅ Отправлено")
+
+
+@router.callback_query(F.data == "back_to_chat")
+async def back_to_chat(callback: CallbackQuery, state: FSMContext):
+    """Вернуться из меню подарков обратно в чат."""
+    data = await state.get_data()
+    partner_tg_id = data.get("partner_tg_id")
+
+    if not partner_tg_id:
+        await callback.answer("Чат потерян, зайди заново", show_alert=True)
+        return
+
+    await callback.message.edit_reply_markup(
+        reply_markup=in_chat_keyboard(partner_id=partner_tg_id)
+    )
+    await callback.answer()

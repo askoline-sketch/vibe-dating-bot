@@ -342,9 +342,12 @@ async def handle_next_liked(callback: CallbackQuery):
 
 
 @router.callback_query(F.data == "back_to_menu")
-async def back_to_menu(callback: CallbackQuery):
+async def back_to_menu(callback: CallbackQuery, state: FSMContext = None):
+    if state:
+        await state.clear()
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
-        "Главное меню:", reply_markup=main_menu_inline_keyboard()
+        "🏠 <b>Главное меню</b>\n\nВыбери действие:",
+        reply_markup=main_menu_inline_keyboard(),
     )
     await callback.answer()

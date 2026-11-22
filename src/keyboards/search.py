@@ -9,9 +9,8 @@ def search_actions_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="❤️ Лайк", callback_data="like"),
                 InlineKeyboardButton(text="💎 Суперлайк", callback_data="superlike"),
             ],
-            [
-                InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip"),
-            ],
+            [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip")],
+            [InlineKeyboardButton(text="🏠 В меню", callback_data="back_to_menu")],
         ]
     )
 
@@ -26,7 +25,7 @@ def matches_list_keyboard(matches: list[dict]) -> InlineKeyboardMarkup:
                 callback_data=f"open_match_{m['match_id']}",
             )
         ])
-    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_menu")])
+    buttons.append([InlineKeyboardButton(text="🏠 В меню", callback_data="back_to_menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -34,9 +33,10 @@ def back_to_menu_keyboard() -> InlineKeyboardMarkup:
     """Кнопка возврата в меню."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔙 В меню", callback_data="back_to_menu")],
+            [InlineKeyboardButton(text="🏠 В меню", callback_data="back_to_menu")],
         ]
     )
+
 
 def who_liked_keyboard(candidate_id: int) -> InlineKeyboardMarkup:
     """Кнопки для анкеты, которая лайкнула тебя."""
@@ -47,6 +47,6 @@ def who_liked_keyboard(candidate_id: int) -> InlineKeyboardMarkup:
                 callback_data=f"like_back_{candidate_id}",
             )],
             [InlineKeyboardButton(text="⏭ Следующий", callback_data="next_liked_me")],
-            [InlineKeyboardButton(text="🔙 В меню", callback_data="back_to_menu")],
+            [InlineKeyboardButton(text="🏠 В меню", callback_data="back_to_menu")],
         ]
     )
