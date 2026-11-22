@@ -28,6 +28,7 @@ def edit_profile_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="Город", callback_data="edit_city"),
                 InlineKeyboardButton(text="О себе", callback_data="edit_bio"),
             ],
+            [InlineKeyboardButton(text="Кого ищу", callback_data="edit_looking_for")],
             [InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_profile")],
         ]
     )

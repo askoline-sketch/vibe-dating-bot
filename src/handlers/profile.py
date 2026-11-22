@@ -14,7 +14,10 @@ from src.keyboards.profile import (
     cancel_keyboard,
     delete_confirm_keyboard,
 )
-from src.keyboards.registration import main_menu_inline_keyboard
+from src.keyboards.registration import (
+    main_menu_inline_keyboard,
+    looking_for_keyboard,
+)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -27,6 +30,7 @@ class EditProfile(StatesGroup):
     age = State()
     city = State()
     bio = State()
+    looking_for = State()  # <-- НОВОЕ
 
 
 async def get_user_by_tg(tg_id: int) -> User | None:
@@ -60,6 +64,8 @@ async def show_profile(message: Message, user: User, photos: list[Photo]):
         await message.answer_photo(photo.file_id, caption=f"Фото #{photo.position + 1}")
 
 
+# ========== ПРОСМОТР АНКЕТЫ ==========
+
 @router.message(F.text == "👤 Моя анкета")
 async def my_profile(message: Message, state: FSMContext = None, user_id: int = None):
     if state:
@@ -88,6 +94,8 @@ async def back_to_profile(callback: CallbackQuery, state: FSMContext = None):
     await show_profile(callback.message, user, photos)
     await callback.answer()
 
+
+# ========== ЗАГРУЗКА ФОТО ==========
 
 @router.callback_query(F.data == "upload_photo")
 async def start_upload_photo(callback: CallbackQuery, state: FSMContext = None):
@@ -170,6 +178,8 @@ async def delete_photo(callback: CallbackQuery):
     await callback.answer()
 
 
+# ========== РЕДАКТИРОВАНИЕ ТЕКСТА ==========
+
 @router.callback_query(F.data == "edit_profile")
 async def start_edit(callback: CallbackQuery):
     await callback.message.edit_reply_markup(reply_markup=edit_profile_keyboard())
@@ -179,14 +189,63 @@ async def start_edit(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("edit_"))
 async def edit_field(callback: CallbackQuery, state: FSMContext):
     field = callback.data.split("_")[1]
-    prompts = {"name": "✏️ Введи новое имя:", "age": "✏️ Введи новый возраст (18–99):", "city": "✏️ Введи новый город:", "bio": "✏️ Расскажи о себе заново:"}
+
+    prompts = {
+        "name": "✏️ Введи новое имя:",
+        "age": "✏️ Введи новый возраст (18–99):",
+        "city": "✏️ Введи новый город:",
+        "bio": "✏️ Расскажи о себе заново:",
+    }
+
     await state.update_data(edit_field=field)
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(prompts[field], reply_markup=cancel_keyboard())
-    state_map = {"name": EditProfile.name, "age": EditProfile.age, "city": EditProfile.city, "bio": EditProfile.bio}
+
+    state_map = {
+        "name": EditProfile.name,
+        "age": EditProfile.age,
+        "city": EditProfile.city,
+        "bio": EditProfile.bio,
+    }
     await state.set_state(state_map[field])
     await callback.answer()
 
+
+# ========== РЕДАКТИРОВАНИЕ "КОГО ИЩУ" ==========
+
+@router.callback_query(F.data == "edit_looking_for")
+async def edit_looking_for(callback: CallbackQuery, state: FSMContext):
+    """Показать клавиатуру выбора, кого искать."""
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(
+        "Выбери, кого ищешь:",
+        reply_markup=looking_for_keyboard(),
+    )
+    await state.set_state(EditProfile.looking_for)
+    await callback.answer()
+
+
+@router.message(EditProfile.looking_for, F.text.in_({"👨 Парней", "👩 Девушек", "👥 Не важно"}))
+async def save_looking_for(message: Message, state: FSMContext):
+    if "Парней" in message.text:
+        looking = "male"
+    elif "Девушек" in message.text:
+        looking = "female"
+    else:
+        looking = "any"
+
+    await update_field(message, state, "looking_for", looking)
+
+
+@router.message(EditProfile.looking_for)
+async def save_looking_for_invalid(message: Message):
+    await message.answer(
+        "Пожалуйста, выбери один из вариантов ниже:",
+        reply_markup=looking_for_keyboard(),
+    )
+
+
+# ========== СОХРАНЕНИЕ ИЗМЕНЕНИЙ ==========
 
 @router.message(EditProfile.name)
 async def save_name(message: Message, state: FSMContext):
@@ -235,10 +294,13 @@ async def update_field(message: Message, state: FSMContext, field: str, value):
 
     await state.clear()
     await message.answer("✅ Обновлено!")
+
     user = await get_user_by_tg(message.from_user.id)
     photos = await get_user_photos(user.id)
     await show_profile(message, user, photos)
 
+
+# ========== УДАЛЕНИЕ АНКЕТЫ ==========
 
 @router.callback_query(F.data == "delete_profile")
 async def ask_delete(callback: CallbackQuery):
