@@ -48,13 +48,21 @@ def confirm_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def main_menu_keyboard() -> ReplyKeyboardMarkup:
-    """Главное меню."""
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="🔍 Искать"), KeyboardButton(text="👤 Моя анкета")],
-            [KeyboardButton(text="❤️ Мои матчи"), KeyboardButton(text="💜 Мои лайки")],
-            [KeyboardButton(text="💎 Подписка"), KeyboardButton(text="🆘 Техподдержка")],
-        ],
-        resize_keyboard=True,
+def main_menu_inline_keyboard() -> InlineKeyboardMarkup:
+    """Главное инлайн-меню."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔍 Искать", callback_data="menu_search"),
+                InlineKeyboardButton(text="👤 Моя анкета", callback_data="menu_profile")
+            ],
+            [
+                InlineKeyboardButton(text="❤️ Мои матчи", callback_data="menu_matches"),
+                InlineKeyboardButton(text="💜 Мои лайки", callback_data="menu_likes")
+            ],
+            [
+                InlineKeyboardButton(text="💎 Подписка", callback_data="show_subscription"),
+                InlineKeyboardButton(text="🆘 Техподдержка", callback_data="menu_support")
+            ],
+        ]
     )

@@ -4,7 +4,7 @@ from aiogram import Router, F
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
 from sqlalchemy import select
 
 from src.database.db import async_session
@@ -14,7 +14,7 @@ from src.keyboards.registration import (
     looking_for_keyboard,
     skip_keyboard,
     confirm_keyboard,
-    main_menu_keyboard,
+    main_menu_inline_keyboard,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,22 +45,29 @@ async def cmd_start(message: Message, state: FSMContext):
         user = result.scalar_one_or_none()
 
     if user:
+        # Убираем старую Reply-клавиатуру (если была)
         await message.answer(
             f"С возвращением, {user.name}! 👋\n\n"
-            "Что будем делать?",
-            reply_markup=main_menu_keyboard(),
+            "Выбери действие в меню ниже:",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        # Отправляем инлайн-меню
+        await message.answer(
+            "📋 Главное меню:",
+            reply_markup=main_menu_inline_keyboard(),
         )
         return
 
+    # ========== РЕГИСТРАЦИЯ ==========
     await message.answer(
-        "👋 Привет! Добро пожаловать в <b>Dating AI Bot</b>.\n\n"
+        "👋 Привет! Добро пожаловать в <b>Vibe</b>.\n\n"
         "Давай создадим твою анкету. Это займёт 1–2 минуты.\n\n"
         "Как тебя зовут?",
     )
     await state.set_state(Registration.name)
 
 
-# ========== РЕГИСТРАЦИЯ ==========
+# ========== ШАГИ РЕГИСТРАЦИИ ==========
 
 @router.message(Registration.name)
 async def reg_name(message: Message, state: FSMContext):
@@ -179,14 +186,17 @@ async def reg_bio(message: Message, state: FSMContext):
 async def restart_profile(callback: CallbackQuery, state: FSMContext):
     """Начать регистрацию заново."""
     await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.message.answer("Хорошо, начнём заново. Как тебя зовут?")
+    await callback.message.answer(
+        "Хорошо, начнём заново. Как тебя зовут?",
+        reply_markup=ReplyKeyboardRemove(),
+    )
     await state.set_state(Registration.name)
     await callback.answer()
 
 
 @router.callback_query(F.data == "confirm_profile")
 async def confirm_profile(callback: CallbackQuery, state: FSMContext):
-    """Сохранить пользователя в БД."""
+    """Сохранить пользователя в БД и показать инлайн-меню."""
     data = await state.get_data()
 
     async with async_session() as session:
@@ -207,7 +217,12 @@ async def confirm_profile(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(
         "✅ Анкета создана!\n\n"
         "Теперь можешь искать людей и общаться. Удачи! 🍀",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    # Показываем инлайн-меню
+    await callback.message.answer(
+        "📋 Главное меню:",
+        reply_markup=main_menu_inline_keyboard(),
     )
     await state.clear()
     await callback.answer("Анкета сохранена!")

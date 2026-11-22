@@ -122,3 +122,23 @@ class View(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow
     )
+
+class Report(Base):
+    __tablename__ = 'reports'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    from_user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
+    to_user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
+    reason: Mapped[str] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Gift(Base):
+    __tablename__ = 'gifts'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    from_user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
+    to_user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
+    gift_type: Mapped[str] = mapped_column(String(50))  # 'rose', 'heart', 'bear'
+    stars_amount: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

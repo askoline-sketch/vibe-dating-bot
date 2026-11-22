@@ -32,19 +32,20 @@ async def main():
 
     dp = Dispatcher(storage=storage)
 
-    # ========== MIDDLEWARES ==========
     dp.message.middleware(SubscriptionMiddleware())
     dp.callback_query.middleware(SubscriptionMiddleware())
 
-    # ========== РОУТЕРЫ ==========
     dp.include_router(start.router)
-    dp.include_router(support.router)
+    dp.include_router(menu.router)  # Инлайн меню
+    dp.include_router(support.router)  # Поддержка
     dp.include_router(profile.router)
     dp.include_router(search.router)
     dp.include_router(chat.router)
     dp.include_router(subscription.router)
+    dp.include_router(gifts.router)  # Подарки
+    dp.include_router(reports.router)  # Жалобы
 
-    logger.info("🚀 Бот запущен (FSM хранится в SQLite)!")
+    logger.info("🚀 Бот запущен!")
     await dp.start_polling(bot)
 
 
