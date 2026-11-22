@@ -61,23 +61,28 @@ async def show_profile(message: Message, user: User, photos: list[Photo]):
 
 
 @router.message(F.text == "👤 Моя анкета")
-async def my_profile(message: Message, state: FSMContext):
-    await state.clear()
-    user = await get_user_by_tg(message.from_user.id)
+async def my_profile(message: Message, state: FSMContext = None, user_id: int = None):
+    if state:
+        await state.clear()
+    user_id = user_id or message.from_user.id
+    user = await get_user_by_tg(user_id)
     if not user:
         await message.answer("❌ Ты ещё не зарегистрирован. Напиши /start.")
         return
+
     photos = await get_user_photos(user.id)
     await show_profile(message, user, photos)
 
 
 @router.callback_query(F.data == "back_to_profile")
-async def back_to_profile(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
+async def back_to_profile(callback: CallbackQuery, state: FSMContext = None):
+    if state:
+        await state.clear()
     user = await get_user_by_tg(callback.from_user.id)
     if not user:
         await callback.message.answer("❌ Анкета не найдена.")
         return
+
     photos = await get_user_photos(user.id)
     await callback.message.edit_reply_markup(reply_markup=None)
     await show_profile(callback.message, user, photos)
@@ -85,16 +90,19 @@ async def back_to_profile(callback: CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(F.data == "upload_photo")
-async def start_upload_photo(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
+async def start_upload_photo(callback: CallbackQuery, state: FSMContext = None):
+    if state:
+        await state.clear()
     user = await get_user_by_tg(callback.from_user.id)
     if not user:
         await callback.answer("Анкета не найдена", show_alert=True)
         return
+
     photos = await get_user_photos(user.id)
     if len(photos) >= MAX_PHOTOS:
         await callback.answer(f"Максимум {MAX_PHOTOS} фото!", show_alert=True)
         return
+
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
         f"📸 Отправь мне фото (осталось мест: {MAX_PHOTOS - len(photos)}).\n\n"
@@ -104,10 +112,11 @@ async def start_upload_photo(callback: CallbackQuery, state: FSMContext):
 
 
 @router.message(F.photo)
-async def handle_photo(message: Message, state: FSMContext):
-    current_state = await state.get_state()
-    if current_state == 'SupportState:waiting':
-        return
+async def handle_photo(message: Message, state: FSMContext = None):
+    if state:
+        current_state = await state.get_state()
+        if current_state == 'SupportState:waiting':
+            return
 
     user = await get_user_by_tg(message.from_user.id)
     if not user:
@@ -131,17 +140,17 @@ async def handle_photo(message: Message, state: FSMContext):
 @router.callback_query(F.data == "delete_photo_menu")
 async def delete_photo_menu(callback: CallbackQuery):
     user = await get_user_by_tg(callback.from_user.id)
-    if not user: return
+    if not user:
+        return
+
     photos = await get_user_photos(user.id)
     if not photos:
         await callback.answer("У тебя нет фото для удаления.", show_alert=True)
         return
 
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    buttons = [[InlineKeyboardButton(text=f"Удалить Фото #{p.position + 1}", callback_data=f"del_photo_{p.id}")] for p
-               in photos]
+    buttons = [[InlineKeyboardButton(text=f"Удалить Фото #{p.position + 1}", callback_data=f"del_photo_{p.id}")] for p in photos]
     buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_profile")])
-
     await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
     await callback.answer()
 
@@ -152,6 +161,7 @@ async def delete_photo(callback: CallbackQuery):
     async with async_session() as session:
         await session.execute(sql_delete(Photo).where(Photo.id == photo_id))
         await session.commit()
+
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer("🗑 Фото удалено.")
     user = await get_user_by_tg(callback.from_user.id)
@@ -169,8 +179,7 @@ async def start_edit(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("edit_"))
 async def edit_field(callback: CallbackQuery, state: FSMContext):
     field = callback.data.split("_")[1]
-    prompts = {"name": "✏️ Введи новое имя:", "age": "✏️ Введи новый возраст (18–99):", "city": "✏️ Введи новый город:",
-               "bio": "✏️ Расскажи о себе заново:"}
+    prompts = {"name": "✏️ Введи новое имя:", "age": "✏️ Введи новый возраст (18–99):", "city": "✏️ Введи новый город:", "bio": "✏️ Расскажи о себе заново:"}
     await state.update_data(edit_field=field)
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(prompts[field], reply_markup=cancel_keyboard())
@@ -181,33 +190,49 @@ async def edit_field(callback: CallbackQuery, state: FSMContext):
 
 @router.message(EditProfile.name)
 async def save_name(message: Message, state: FSMContext):
-    if len(message.text.strip()) < 2: return await message.answer("Короткое имя.")
-    await update_field(message, state, "name", message.text.strip())
+    name = message.text.strip()
+    if len(name) < 2:
+        await message.answer("Имя слишком короткое.")
+        return
+    await update_field(message, state, "name", name)
 
 
 @router.message(EditProfile.age)
 async def save_age(message: Message, state: FSMContext):
-    if not message.text.isdigit(): return await message.answer("Нужно число.")
+    if not message.text.isdigit() or not (18 <= int(message.text) <= 99):
+        await message.answer("Возраст должен быть числом от 18 до 99.")
+        return
     await update_field(message, state, "age", int(message.text))
 
 
 @router.message(EditProfile.city)
 async def save_city(message: Message, state: FSMContext):
-    await update_field(message, state, "city", message.text.strip())
+    city = message.text.strip()
+    if len(city) < 2:
+        await message.answer("Город слишком короткий.")
+        return
+    await update_field(message, state, "city", city)
 
 
 @router.message(EditProfile.bio)
 async def save_bio(message: Message, state: FSMContext):
-    await update_field(message, state, "bio", message.text.strip()[:300])
+    bio = message.text.strip()[:300]
+    await update_field(message, state, "bio", bio)
 
 
 async def update_field(message: Message, state: FSMContext, field: str, value):
     user = await get_user_by_tg(message.from_user.id)
+    if not user:
+        await message.answer("❌ Анкета не найдена.")
+        await state.clear()
+        return
+
     async with async_session() as session:
         result = await session.execute(select(User).where(User.id == user.id))
         db_user = result.scalar_one()
         setattr(db_user, field, value)
         await session.commit()
+
     await state.clear()
     await message.answer("✅ Обновлено!")
     user = await get_user_by_tg(message.from_user.id)
@@ -224,10 +249,15 @@ async def ask_delete(callback: CallbackQuery):
 @router.callback_query(F.data == "confirm_delete_profile")
 async def confirm_delete(callback: CallbackQuery):
     user = await get_user_by_tg(callback.from_user.id)
+    if not user:
+        await callback.answer("Анкета не найдена", show_alert=True)
+        return
+
     async with async_session() as session:
         await session.execute(sql_delete(Photo).where(Photo.user_id == user.id))
         await session.execute(sql_delete(User).where(User.id == user.id))
         await session.commit()
+
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer("🗑 Анкета удалена. Напиши /start для создания новой.")
     await callback.answer("Удалено")
