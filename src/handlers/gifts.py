@@ -1,5 +1,6 @@
 import logging
 from aiogram import Router, F
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, LabeledPrice, PreCheckoutQuery
 from sqlalchemy import select
 
@@ -12,34 +13,46 @@ router = Router()
 
 
 @router.callback_query(F.data == "send_gift")
-async def show_gifts_menu(callback: CallbackQuery):
+async def show_gifts_menu(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_reply_markup(reply_markup=gifts_menu_keyboard())
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("buy_gift_"))
-async def send_gift_invoice(callback: CallbackQuery):
+async def send_gift_invoice(callback: CallbackQuery, state: FSMContext):
     gift_key = callback.data.split("_")[-1]
+
+    if gift_key not in GIFTS:
+        await callback.answer("Такого подарка нет", show_alert=True)
+        return
+
     name, price = GIFTS[gift_key]
 
-    # Достаем ID собеседника из состояния чата
-    state_data = await callback.bot.fsm.get_context(callback.bot, callback.from_user.id,
-                                                    callback.message.chat.id).get_data()
+    # Получаем ID собеседника из состояния FSM (правильный способ)
+    state_data = await state.get_data()
     partner_tg_id = state_data.get("partner_tg_id")
 
     if not partner_tg_id:
-        await callback.answer("Ошибка: собеседник не найден", show_alert=True)
+        await callback.answer(
+            "Ошибка: собеседник не найден. Зайди в чат заново.",
+            show_alert=True,
+        )
         return
 
-    await callback.bot.send_invoice(
-        chat_id=callback.from_user.id,
-        title=f"Подарок: {name}",
-        description=f"Отправить {name} собеседнику в чате",
-        payload=f"gift_{gift_key}_{partner_tg_id}",
-        provider_token="",
-        currency="XTR",
-        prices=[LabeledPrice(label=name, amount=price)],
-    )
+    try:
+        await callback.bot.send_invoice(
+            chat_id=callback.from_user.id,
+            title=f"Подарок: {name}",
+            description=f"Отправить {name} собеседнику в чате",
+            payload=f"gift_{gift_key}_{partner_tg_id}",
+            provider_token="",
+            currency="XTR",
+            prices=[LabeledPrice(label=name, amount=price)],
+        )
+    except Exception as e:
+        logger.error(f"Ошибка выставления счёта на подарок: {e}")
+        await callback.message.answer("❌ Не удалось создать счёт.")
+
     await callback.answer()
 
 
@@ -53,16 +66,29 @@ async def process_gift_payment(message: Message):
     payment = message.successful_payment
     payload = payment.invoice_payload  # gift_rose_123456789
 
-    _, gift_key, partner_tg_id_str = payload.split("_")
-    partner_tg_id = int(partner_tg_id_str)
+    try:
+        _, gift_key, partner_tg_id_str = payload.split("_")
+        partner_tg_id = int(partner_tg_id_str)
+    except (ValueError, IndexError):
+        logger.error(f"Некорректный payload подарка: {payload}")
+        return
+
+    if gift_key not in GIFTS:
+        logger.error(f"Неизвестный подарок: {gift_key}")
+        return
+
     name, price = GIFTS[gift_key]
 
     # Сохраняем в БД
     async with async_session() as session:
-        user_res = await session.execute(select(User).where(User.tg_id == message.from_user.id))
+        user_res = await session.execute(
+            select(User).where(User.tg_id == message.from_user.id)
+        )
         from_user = user_res.scalar_one_or_none()
 
-        partner_res = await session.execute(select(User).where(User.tg_id == partner_tg_id))
+        partner_res = await session.execute(
+            select(User).where(User.tg_id == partner_tg_id)
+        )
         to_user = partner_res.scalar_one_or_none()
 
         if from_user and to_user:
@@ -70,7 +96,7 @@ async def process_gift_payment(message: Message):
                 from_user_id=from_user.id,
                 to_user_id=to_user.id,
                 gift_type=gift_key,
-                stars_amount=price
+                stars_amount=price,
             )
             session.add(gift)
             await session.commit()
@@ -81,7 +107,7 @@ async def process_gift_payment(message: Message):
                     partner_tg_id,
                     f"🎁 <b>Вам подарок!</b>\n\n"
                     f"<b>{from_user.name}</b> подарил(а) вам {name}.\n\n"
-                    f"Приятного общения! 💜"
+                    f"Приятного общения! 💜",
                 )
             except Exception as e:
                 logger.error(f"Не удалось уведомить о подарке: {e}")
