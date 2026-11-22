@@ -23,31 +23,69 @@ async def save_or_touch_view(session: AsyncSession, from_user_id: int, to_user_i
 
 
 async def _find_unseen_candidate(session: AsyncSession, user: User) -> User | None:
-    """Найти анкету, которую пользователь ещё НЕ видел."""
+    """Поэтапный поиск: сначала строгий, потом без города, потом без возраста."""
+
+    # Базовые фильтры (пол)
     if user.looking_for == "any":
         gender_filter = User.gender.in_(["male", "female"])
     else:
         gender_filter = User.gender == user.looking_for
 
-    age_min = max(18, user.age - 5)
-    age_max = user.age + 5
-
     liked_subq = select(Like.to_user_id).where(Like.from_user_id == user.id)
     viewed_subq = select(View.to_user_id).where(View.from_user_id == user.id)
+
+    base_filters = [
+        User.id != user.id,
+        User.is_active == True,
+        gender_filter,
+        not_(User.id.in_(liked_subq)),
+        not_(User.id.in_(viewed_subq)),
+    ]
+
+    # Этап 1: город + возраст
+    age_min = max(18, user.age - 5)
+    age_max = user.age + 5
 
     stmt = (
         select(User)
         .where(
             and_(
-                User.id != user.id,
-                User.is_active == True,
-                gender_filter,
+                *base_filters,
                 User.age >= age_min,
                 User.age <= age_max,
-                not_(User.id.in_(liked_subq)),
-                not_(User.id.in_(viewed_subq)),
+                User.city == user.city,
             )
         )
+        .order_by(func.random())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    candidate = result.scalar_one_or_none()
+    if candidate:
+        return candidate
+
+    # Этап 2: возраст ±10, без города
+    stmt = (
+        select(User)
+        .where(
+            and_(
+                *base_filters,
+                User.age >= max(18, user.age - 10),
+                User.age <= user.age + 10,
+            )
+        )
+        .order_by(func.random())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    candidate = result.scalar_one_or_none()
+    if candidate:
+        return candidate
+
+    # Этап 3: только пол (игнорируем возраст и город)
+    stmt = (
+        select(User)
+        .where(and_(*base_filters))
         .order_by(func.random())
         .limit(1)
     )
