@@ -8,14 +8,13 @@ from sqlalchemy import select
 from src.config import config
 from src.database.db import async_session
 from src.database.models import User
-from src.keyboards.registration import main_menu_keyboard
+from src.keyboards.registration import main_menu_inline_keyboard  # <-- ИСПРАВЛЕНО
 from src.keyboards.support import support_cancel_keyboard
 
 logger = logging.getLogger(__name__)
 router = Router()
 
 # Маппинг: (admin_tg_id, message_id_у_админа) -> user_tg_id
-# Для автоответа от админа пользователю
 support_threads: dict[tuple[int, int], int] = {}
 
 
@@ -40,17 +39,14 @@ async def cancel_support(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
-        "Главное меню:", reply_markup=main_menu_keyboard()
+        "Главное меню:",
+        reply_markup=main_menu_inline_keyboard(),  # <-- ИСПРАВЛЕНО
     )
     await callback.answer()
 
 
 @router.message(SupportState.waiting, F.text | F.photo)
 async def handle_support_message(message: Message, state: FSMContext):
-    await _forward_to_admin(message, state)
-
-
-async def _forward_to_admin(message: Message, state: FSMContext):
     user_tg = message.from_user.id
 
     async with async_session() as session:
@@ -73,7 +69,7 @@ async def _forward_to_admin(message: Message, state: FSMContext):
     if not config.ADMIN_IDS:
         await message.answer(
             "⚠️ Техподдержка временно недоступна.",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_inline_keyboard(),  # <-- ИСПРАВЛЕНО
         )
         await state.clear()
         return
@@ -103,12 +99,12 @@ async def _forward_to_admin(message: Message, state: FSMContext):
         await message.answer(
             "✅ Сообщение отправлено разработчику!\n"
             "Ответ придёт в этот же чат.",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_inline_keyboard(),  # <-- ИСПРАВЛЕНО
         )
     else:
         await message.answer(
             "⚠️ Не удалось доставить. Попробуй позже.",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_inline_keyboard(),  # <-- ИСПРАВЛЕНО
         )
 
 
