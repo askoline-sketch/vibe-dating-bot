@@ -15,16 +15,15 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(64), nullable=True)
     name: Mapped[str] = mapped_column(String(64))
     age: Mapped[int] = mapped_column(Integer)
-    gender: Mapped[str] = mapped_column(String(10))  # 'male' / 'female'
-    looking_for: Mapped[str] = mapped_column(String(10))  # 'male' / 'female' / 'any'
+    gender: Mapped[str] = mapped_column(String(10))
+    looking_for: Mapped[str] = mapped_column(String(10))
     city: Mapped[str] = mapped_column(String(64))
     bio: Mapped[str] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)  # <-- НОВОЕ
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    photos = relationship(
-        'Photo', back_populates='user', cascade='all, delete-orphan'
-    )
+    photos = relationship('Photo', back_populates='user', cascade='all, delete-orphan')
 
 
 class Photo(Base):

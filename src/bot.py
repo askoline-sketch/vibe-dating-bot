@@ -8,8 +8,12 @@ from aiogram.enums import ParseMode
 from aiogram_sqlite_storage.sqlitestore import SQLStorage
 
 from src.config import config
-from src.handlers import start, profile, search, chat, subscription, support, gifts, reports, menu
+from src.handlers import (
+    start, profile, search, chat, subscription,
+    support, gifts, reports, menu, admin,
+)
 from src.middlewares.subscription import SubscriptionMiddleware
+from src.middlewares.ban import BanMiddleware
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,20 +36,25 @@ async def main():
 
     dp = Dispatcher(storage=storage)
 
+    # Middlewares (порядок важен: сначала бан, потом подписка)
+    dp.message.middleware(BanMiddleware())
+    dp.callback_query.middleware(BanMiddleware())
     dp.message.middleware(SubscriptionMiddleware())
     dp.callback_query.middleware(SubscriptionMiddleware())
 
+    # Роутеры
     dp.include_router(start.router)
-    dp.include_router(menu.router)  # Инлайн меню
-    dp.include_router(support.router)  # Поддержка
+    dp.include_router(menu.router)
+    dp.include_router(support.router)
     dp.include_router(profile.router)
     dp.include_router(search.router)
     dp.include_router(chat.router)
     dp.include_router(subscription.router)
-    dp.include_router(gifts.router)  # Подарки
-    dp.include_router(reports.router)  # Жалобы
+    dp.include_router(gifts.router)
+    dp.include_router(reports.router)
+    dp.include_router(admin.router)  # <-- НОВЫЙ
 
-    logger.info("🚀 Бот запущен!")
+    logger.info("🚀 Бот запущен (админка: /admin)!")
     await dp.start_polling(bot)
 
 
