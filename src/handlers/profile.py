@@ -30,8 +30,10 @@ class EditProfile(StatesGroup):
     age = State()
     city = State()
     bio = State()
-    looking_for = State()  # <-- НОВОЕ
+    looking_for = State()
 
+
+# ========== ВСПОМОГАТЕЛЬНЫЕ ==========
 
 async def get_user_by_tg(tg_id: int) -> User | None:
     async with async_session() as session:
@@ -47,13 +49,22 @@ async def get_user_photos(user_id: int) -> list[Photo]:
         return list(result.scalars().all())
 
 
+def _format_looking_for(value: str) -> str:
+    """Человекочитаемый формат поля looking_for."""
+    return {
+        "male": "Парней",
+        "female": "Девушек",
+        "any": "Не важно",
+    }.get(value, value)
+
+
 async def show_profile(message: Message, user: User, photos: list[Photo]):
     text = (
         f"👤 <b>Твоя анкета</b>\n\n"
         f"<b>Имя:</b> {user.name}\n"
         f"<b>Возраст:</b> {user.age}\n"
         f"<b>Пол:</b> {'Парень' if user.gender == 'male' else 'Девушка'}\n"
-        f"<b>Ищу:</b> {user.looking_for}\n"
+        f"<b>Ищу:</b> {_format_looking_for(user.looking_for)}\n"
         f"<b>Город:</b> {user.city}\n"
         f"<b>О себе:</b> {user.bio or '—'}\n\n"
         f"📸 Фото: <b>{len(photos)}/{MAX_PHOTOS}</b>"
@@ -157,9 +168,17 @@ async def delete_photo_menu(callback: CallbackQuery):
         return
 
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    buttons = [[InlineKeyboardButton(text=f"Удалить Фото #{p.position + 1}", callback_data=f"del_photo_{p.id}")] for p in photos]
+    buttons = [
+        [InlineKeyboardButton(
+            text=f"Удалить Фото #{p.position + 1}",
+            callback_data=f"del_photo_{p.id}",
+        )]
+        for p in photos
+    ]
     buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_profile")])
-    await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await callback.message.edit_reply_markup(
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+    )
     await callback.answer()
 
 
@@ -178,7 +197,7 @@ async def delete_photo(callback: CallbackQuery):
     await callback.answer()
 
 
-# ========== РЕДАКТИРОВАНИЕ ТЕКСТА ==========
+# ========== МЕНЮ РЕДАКТИРОВАНИЯ ==========
 
 @router.callback_query(F.data == "edit_profile")
 async def start_edit(callback: CallbackQuery):
@@ -186,7 +205,44 @@ async def start_edit(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("edit_"))
+# ========== РЕДАКТИРОВАНИЕ "КОГО ИЩУ" (СТАВИМ ПЕРВЫМ!) ==========
+
+@router.callback_query(F.data == "edit_looking_for")
+async def edit_looking_for(callback: CallbackQuery, state: FSMContext):
+    """Показать клавиатуру выбора, кого искать."""
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(
+        "Кого ищешь?",
+        reply_markup=looking_for_keyboard(),
+    )
+    await state.set_state(EditProfile.looking_for)
+    await callback.answer()
+
+
+@router.message(EditProfile.looking_for, F.text.in_({"👨 Парней", "👩 Девушек", "👥 Не важно"}))
+async def save_looking_for(message: Message, state: FSMContext):
+    if "Парней" in message.text:
+        looking = "male"
+    elif "Девушек" in message.text:
+        looking = "female"
+    else:
+        looking = "any"
+    await update_field(message, state, "looking_for", looking)
+
+
+@router.message(EditProfile.looking_for)
+async def save_looking_for_invalid(message: Message):
+    await message.answer(
+        "Пожалуйста, выбери один из вариантов ниже:",
+        reply_markup=looking_for_keyboard(),
+    )
+
+
+# ========== РЕДАКТИРОВАНИЕ ТЕКСТОВЫХ ПОЛЕЙ (СТАВИМ ВТОРЫМ!) ==========
+
+@router.callback_query(
+    F.data.startswith("edit_") & ~F.data.in_({"edit_looking_for", "edit_profile"})
+)
 async def edit_field(callback: CallbackQuery, state: FSMContext):
     field = callback.data.split("_")[1]
 
@@ -209,40 +265,6 @@ async def edit_field(callback: CallbackQuery, state: FSMContext):
     }
     await state.set_state(state_map[field])
     await callback.answer()
-
-
-# ========== РЕДАКТИРОВАНИЕ "КОГО ИЩУ" ==========
-
-@router.callback_query(F.data == "edit_looking_for")
-async def edit_looking_for(callback: CallbackQuery, state: FSMContext):
-    """Показать клавиатуру выбора, кого искать."""
-    await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.message.answer(
-        "Выбери, кого ищешь:",
-        reply_markup=looking_for_keyboard(),
-    )
-    await state.set_state(EditProfile.looking_for)
-    await callback.answer()
-
-
-@router.message(EditProfile.looking_for, F.text.in_({"👨 Парней", "👩 Девушек", "👥 Не важно"}))
-async def save_looking_for(message: Message, state: FSMContext):
-    if "Парней" in message.text:
-        looking = "male"
-    elif "Девушек" in message.text:
-        looking = "female"
-    else:
-        looking = "any"
-
-    await update_field(message, state, "looking_for", looking)
-
-
-@router.message(EditProfile.looking_for)
-async def save_looking_for_invalid(message: Message):
-    await message.answer(
-        "Пожалуйста, выбери один из вариантов ниже:",
-        reply_markup=looking_for_keyboard(),
-    )
 
 
 # ========== СОХРАНЕНИЕ ИЗМЕНЕНИЙ ==========
