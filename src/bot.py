@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram_sqlite_storage.sqlitestore import SQLStorage
 
 from src.config import config
-from src.handlers import start, profile, search, chat, subscription, support
+from src.handlers import start, profile, search, chat, subscription, support, gifts, reports, menu
 from src.middlewares.subscription import SubscriptionMiddleware
 
 logging.basicConfig(
