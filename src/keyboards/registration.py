@@ -54,15 +54,19 @@ def main_menu_inline_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="🔍 Искать", callback_data="menu_search"),
-                InlineKeyboardButton(text="👤 Моя анкета", callback_data="menu_profile")
+                InlineKeyboardButton(text="👤 Моя анкета", callback_data="menu_profile"),
             ],
             [
                 InlineKeyboardButton(text="❤️ Мои матчи", callback_data="menu_matches"),
-                InlineKeyboardButton(text="💜 Мои лайки", callback_data="menu_likes")
+                InlineKeyboardButton(text="💜 Мои лайки", callback_data="menu_likes"),
+            ],
+            [
+                InlineKeyboardButton(text="👀 Мои просмотры", callback_data="menu_views"),
+                InlineKeyboardButton(text="📊 Статистика", callback_data="menu_stats"),
             ],
             [
                 InlineKeyboardButton(text="💎 Подписка", callback_data="show_subscription"),
-                InlineKeyboardButton(text="🆘 Техподдержка", callback_data="menu_support")
+                InlineKeyboardButton(text="🆘 Техподдержка", callback_data="menu_support"),
             ],
         ]
     )

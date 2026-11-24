@@ -10,7 +10,7 @@ from aiogram_sqlite_storage.sqlitestore import SQLStorage
 from src.config import config
 from src.handlers import (
     start, profile, search, chat, subscription,
-    support, gifts, reports, menu, admin,
+    support, gifts, reports, menu, admin, stats_and_views,
 )
 from src.middlewares.subscription import SubscriptionMiddleware
 from src.middlewares.ban import BanMiddleware
@@ -52,7 +52,8 @@ async def main():
     dp.include_router(subscription.router)
     dp.include_router(gifts.router)
     dp.include_router(reports.router)
-    dp.include_router(admin.router)  # <-- НОВЫЙ
+    dp.include_router(admin.router)
+    dp.include_router(stats_and_views.router)
 
     logger.info("🚀 Бот запущен (админка: /admin)!")
     await dp.start_polling(bot)
