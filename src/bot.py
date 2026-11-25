@@ -14,6 +14,7 @@ from src.handlers import (
 )
 from src.middlewares.subscription import SubscriptionMiddleware
 from src.middlewares.ban import BanMiddleware
+from src.middlewares.last_seen import LastSeenMiddleware
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +40,8 @@ async def main():
     # Middlewares (порядок важен: сначала бан, потом подписка)
     dp.message.middleware(BanMiddleware())
     dp.callback_query.middleware(BanMiddleware())
+    dp.message.middleware(LastSeenMiddleware())  # <-- НОВОЕ
+    dp.callback_query.middleware(LastSeenMiddleware())  # <-- НОВОЕ
     dp.message.middleware(SubscriptionMiddleware())
     dp.callback_query.middleware(SubscriptionMiddleware())
 

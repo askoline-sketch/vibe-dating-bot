@@ -20,7 +20,10 @@ class User(Base):
     city: Mapped[str] = mapped_column(String(64))
     bio: Mapped[str] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)  # <-- НОВОЕ
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_seen: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     photos = relationship('Photo', back_populates='user', cascade='all, delete-orphan')
@@ -78,6 +81,9 @@ class Message(Base):
     )
     text: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    user_message_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
+    partner_message_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false')
 
 
 class Subscription(Base):
