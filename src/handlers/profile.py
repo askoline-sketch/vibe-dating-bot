@@ -6,6 +6,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy import select, delete as sql_delete
 
+from src.services.profanity import contains_profanity
 from src.database.db import async_session
 from src.database.models import User, Photo
 from src.keyboards.profile import (
@@ -298,6 +299,12 @@ async def save_city(message: Message, state: FSMContext):
 @router.message(EditProfile.bio)
 async def save_bio(message: Message, state: FSMContext):
     bio = message.text.strip()[:300]
+    if contains_profanity(bio):
+        await message.answer(
+            "⚠️ Нецензурная лексика запрещена. Попробуй ещё раз:",
+            reply_markup=cancel_keyboard(),
+        )
+        return
     await update_field(message, state, "bio", bio)
 
 

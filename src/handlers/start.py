@@ -7,6 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
 from sqlalchemy import select
 
+from src.services.profanity import contains_profanity
 from src.database.db import async_session
 from src.database.models import User
 from src.keyboards.registration import (
@@ -163,8 +164,15 @@ async def reg_city(message: Message, state: FSMContext):
 @router.message(Registration.bio)
 async def reg_bio(message: Message, state: FSMContext):
     bio = "" if "Пропустить" in message.text else message.text.strip()[:300]
-    await state.update_data(bio=bio)
 
+    if bio and contains_profanity(bio):
+        await message.answer(
+            "⚠️ В описании обнаружена нецензурная лексика.\n"
+            "Пожалуйста, переформулируй (без мата):"
+        )
+        return
+
+    await state.update_data(bio=bio)
     data = await state.get_data()
     text = (
         "📋 Проверь свою анкету:\n\n"
